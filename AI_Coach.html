@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 教練 (雲端同步版) - Winbond Pro</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --primary-text: #2c3e50;
+            --secondary-text: #7f8c8d;
+            --accent-color: #3498db;
+            --cambridge-color: #d4001d;
+            --again-color: #e74c3c;
+            --hard-color: #e67e22;
+            --good-color: #27ae60;
+            --easy-color: #2980b9;
+        }
+
+        body { font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; background-color: var(--bg-color); display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        #app { width: 100%; max-width: 500px; text-align: center; }
+
+        /* 同步功能列 */
+        .sync-bar { display: flex; gap: 10px; margin-bottom: 10px; justify-content: center; }
+        .btn-sync { background: #95a5a6; color: white; border: none; padding: 5px 10px; border-radius: 5px; font-size: 0.7rem; cursor: pointer; }
+        .btn-sync:hover { background: #7f8c8d; }
+
+        .stats-bar { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; margin-bottom: 10px; color: var(--secondary-text); }
+        .search-row { display: flex; gap: 8px; margin-bottom: 15px; position: relative; width: 100%; }
+        #searchInput { flex: 1; padding: 10px 15px; border-radius: 20px; border: 1px solid #ddd; outline: none; }
+        .btn-cambridge-search { background-color: var(--cambridge-color); color: white; padding: 8px 15px; border-radius: 20px; border: none; font-size: 0.75rem; cursor: pointer; font-weight: bold; }
+        #searchResults { position: absolute; top: 45px; width: 100%; background: white; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); z-index: 10; max-height: 200px; overflow-y: auto; display: none; text-align: left; }
+        .search-item { padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #eee; }
+
+        .card { background: var(--card-bg); padding: 40px 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); min-height: 250px; display: flex; flex-direction: column; justify-content: center; cursor: pointer; position: relative; }
+        .word-title { font-size: 2.5rem; font-weight: bold; margin-bottom: 5px; }
+        .btn-voice { background: none; border: 2px solid var(--accent-color); color: var(--accent-color); border-radius: 50%; width: 35px; height: 35px; cursor: pointer; font-size: 1.2rem; margin-left: 10px; }
+        
+        #answer-area { display: none; border-top: 1px solid #eee; padding-top: 20px; margin-top: 20px; }
+        .definition { font-size: 1.2rem; font-weight: 500; margin-bottom: 10px; }
+        .example-container { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; }
+        .example-text { flex: 1; font-size: 0.9rem; color: var(--secondary-text); font-style: italic; text-align: left; }
+
+        .button-group { display: none; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 25px; }
+        button.rate-btn { border: none; padding: 12px 5px; border-radius: 10px; color: white; font-weight: bold; cursor: pointer; font-size: 0.8rem; }
+        .btn-again { background-color: var(--again-color); }
+        .btn-hard { background-color: var(--hard-color); }
+        .btn-good { background-color: var(--good-color); }
+        .btn-easy { background-color: var(--easy-color); }
+
+        .stats-dashboard { background: #fff; border-radius: 15px; padding: 15px; margin-top: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); width: 100%; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
+        .stat-item { padding: 10px; border-radius: 8px; color: white; font-size: 0.8rem; }
+        .stat-val { font-size: 1.2rem; font-weight: bold; display: block; }
+
+        .hint { font-size: 0.8rem; color: #ccc; margin-top: 20px; }
+        input[type="file"] { display: none; }
+        .upload-label { cursor: pointer; color: var(--accent-color); text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="sync-bar">
+        <button class="btn-sync" onclick="exportProgress()">📤 備份進度代碼</button>
+        <button class="btn-sync" onclick="importProgress()">📥 還原進度代碼</button>
+    </div>
+
+    <div class="stats-bar">
+        <span id="progress">剩餘卡片: 0</span>
+        <label class="upload-label" for="fileInput">追加 CSV</label>
+        <input type="file" id="fileInput" accept=".csv">
+    </div>
+
+    <div class="search-row">
+        <input type="text" id="searchInput" placeholder="搜尋單字..." oninput="searchWords()">
+        <button class="btn-cambridge-search" onclick="openCambridgeDirect()">劍橋查詢</button>
+        <div id="searchResults"></div>
+    </div>
+
+    <div class="card" id="mainCard">
+        <div id="card-front" onclick="showAnswer()">
+            <div style="display:flex; align-items:center; justify-content:center;">
+                <h2 class="word-title" id="displayWord">請匯入資料</h2>
+                <button class="btn-voice" onclick="event.stopPropagation(); reSpeak();">🔊</button>
+            </div>
+        </div>
+        <div id="answer-area" onclick="showAnswer()">
+            <div class="definition" id="displayDefinition"></div>
+            <div class="example-container">
+                <div class="example-text" id="displayExample"></div>
+                <button style="background:none; border:1px solid #ccc; border-radius:50%; cursor:pointer;" onclick="event.stopPropagation(); speakExample();">🔊</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="button-group" id="controls">
+        <button class="rate-btn btn-again" onclick="handleRate(1)">Again (1)</button>
+        <button class="rate-btn btn-hard" onclick="handleRate(2)">Hard (2)</button>
+        <button class="rate-btn btn-good" onclick="handleRate(3)">Good (3)</button>
+        <button class="rate-btn btn-easy" onclick="handleRate(4)">掌握 (4)</button>
+    </div>
+
+    <div class="stats-dashboard">
+        <div class="stats-grid">
+            <div class="stat-item btn-again"><span class="stat-val" id="count-again">0</span>忘記</div>
+            <div class="stat-item btn-hard"><span class="stat-val" id="count-hard">0</span>模糊</div>
+            <div class="stat-item btn-good"><span class="stat-val" id="count-good">0</span>熟悉</div>
+            <div class="stat-item btn-easy"><span class="stat-val" id="count-easy">0</span>掌握</div>
+        </div>
+        <p style="font-size:0.7rem; color:#999; margin-top:10px;">掌握累積：<span id="total-mastered">0</span></p>
+    </div>
+</div>
+
+<script>
+    let deck = JSON.parse(localStorage.getItem('vocab_deck')) || [];
+    let masteredList = JSON.parse(localStorage.getItem('mastered_list')) || [];
+    let currentIndex = 0;
+    let today = new Date().toLocaleDateString();
+    let stats = JSON.parse(localStorage.getItem('daily_stats')) || { date: today, again: 0, hard: 0, good: 0, easy: 0, total: 0 };
+
+    function init() { updateStatsUI(); if (deck.length > 0) updateCard(); }
+
+    function updateCard() {
+        if (deck.length === 0) { document.getElementById('displayWord').innerText = "已完成！"; return; }
+        const item = deck[currentIndex];
+        document.getElementById('displayWord').innerText = item.word;
+        document.getElementById('displayDefinition').innerText = item.definition;
+        document.getElementById('displayExample').innerText = item.example;
+        document.getElementById('answer-area').style.display = 'none';
+        document.getElementById('controls').style.display = 'none';
+        document.getElementById('progress').innerText = `剩餘卡片: ${deck.length}`;
+        speak(item.word);
+    }
+
+    function showAnswer() { document.getElementById('answer-area').style.display = 'block'; document.getElementById('controls').style.display = 'grid'; }
+
+    function handleRate(level) {
+        const item = deck.splice(currentIndex, 1)[0];
+        if (level === 1) { stats.again++; deck.splice(1, 0, item); }
+        else if (level === 2) { stats.hard++; deck.splice(Math.floor(deck.length/2), 0, item); }
+        else if (level === 3) { stats.good++; deck.push(item); }
+        else if (level === 4) { stats.easy++; masteredList.push(item.word.toLowerCase()); }
+        saveToStorage(); updateStatsUI(); updateCard();
+    }
+
+    function saveToStorage() {
+        localStorage.setItem('vocab_deck', JSON.stringify(deck));
+        localStorage.setItem('mastered_list', JSON.stringify(masteredList));
+        localStorage.setItem('daily_stats', JSON.stringify(stats));
+    }
+
+    // --- 同步核心功能 ---
+    function exportProgress() {
+        const data = { deck, masteredList, stats };
+        const dataStr = btoa(unescape(encodeURIComponent(JSON.stringify(data)))); // 編碼為 Base64
+        const dummy = document.createElement("textarea");
+        document.body.appendChild(dummy);
+        dummy.value = dataStr;
+        dummy.select();
+        document.execCommand("copy");
+        document.body.removeChild(dummy);
+        alert("進度代碼已複製到剪貼簿！\n請將其貼到 Gmail 草稿或 Google Keep 存檔。");
+    }
+
+    function importProgress() {
+        const code = prompt("請貼入進度代碼：");
+        if (code) {
+            try {
+                const decoded = JSON.parse(decodeURIComponent(escape(atob(code))));
+                deck = decoded.deck;
+                masteredList = decoded.masteredList;
+                stats = decoded.stats;
+                saveToStorage();
+                init();
+                alert("進度還原成功！");
+            } catch (e) { alert("無效的代碼，請確認複製完整。"); }
+        }
+    }
+
+    // 發音與搜尋功能保持原狀...
+    function speak(t) { window.speechSynthesis.cancel(); const m = new SpeechSynthesisUtterance(t); m.lang = 'en-US'; window.speechSynthesis.speak(m); }
+    function reSpeak() { speak(deck[currentIndex].word); }
+    function speakExample() { speak(deck[currentIndex].example); }
+    function updateStatsUI() {
+        document.getElementById('count-again').innerText = stats.again;
+        document.getElementById('count-hard').innerText = stats.hard;
+        document.getElementById('count-good').innerText = stats.good;
+        document.getElementById('count-easy').innerText = stats.easy;
+        document.getElementById('total-mastered').innerText = masteredList.length;
+    }
+    
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const lines = event.target.result.split('\n');
+            const newItems = lines.slice(1).map(l => {
+                const p = l.split(',');
+                if (p.length >= 2) return { word: p[0].trim(), definition: p[1].trim(), example: (p[2] || "").trim() };
+            }).filter(i => i);
+            const masterSet = new Set(masteredList);
+            deck = [...deck, ...newItems.filter(i => !masterSet.has(i.word.toLowerCase()))];
+            saveToStorage(); init();
+        };
+        reader.readAsText(e.target.files[0]);
+    });
+
+    init();
+</script>
+
+</body>
+</html>
