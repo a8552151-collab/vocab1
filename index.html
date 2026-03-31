@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 教練 (雲端自動化版) - Winbond Pro</title>
+    <title>AI 教練 (Pro 完全體) - Winbond PI Executive</title>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -28,16 +28,15 @@
         // --- 雲端同步邏輯 ---
         window.uploadToCloud = async () => {
             const syncId = localStorage.getItem('sync_id');
-            if(!syncId) return;
+            if(!syncId || !window.isCloudMode) return;
             const data = {
                 deck: JSON.parse(localStorage.getItem('vocab_deck')) || [],
                 mastered: JSON.parse(localStorage.getItem('mastered_list')) || [],
-                stats: JSON.parse(localStorage.getItem('daily_stats')) || {}
+                stats: JSON.parse(localStorage.getItem('daily_stats')) || {},
+                time: new Date().getTime()
             };
-            try {
-                await setDoc(doc(db, "users", syncId), data);
-                console.log("數據已自動同步至雲端");
-            } catch (e) { console.error("同步失敗:", e); }
+            try { await setDoc(doc(db, "users", syncId), data); console.log("雲端同步成功"); } 
+            catch (e) { console.error("同步失敗:", e); }
         };
 
         window.downloadFromCloud = async () => {
@@ -49,7 +48,7 @@
                 localStorage.setItem('vocab_deck', JSON.stringify(cloudData.deck));
                 localStorage.setItem('mastered_list', JSON.stringify(cloudData.mastered));
                 localStorage.setItem('daily_stats', JSON.stringify(cloudData.stats));
-                alert("雲端進度下載完成！網頁將重新載入。");
+                alert("雲端進度下載完成！");
                 location.reload();
             } else { alert("雲端找不到此 ID 的紀錄。"); }
         };
@@ -57,74 +56,128 @@
 
     <style>
         :root {
-            --bg-color: #f4f7f6;
-            --card-bg: #ffffff;
-            --primary-text: #2c3e50;
-            --secondary-text: #7f8c8d;
-            --accent-color: #3498db;
-            --cambridge-color: #d4001d;
-            --again-color: #e74c3c;
-            --hard-color: #e67e22;
-            --good-color: #27ae60;
-            --easy-color: #2980b9;
+            --bg-color: #f4f7f6; --card-bg: #ffffff; --text-p: #2c3e50; --text-s: #7f8c8d;
+            --accent: #3498db; --cambridge: #d4001d;
+            --again: #e74c3c; --hard: #e67e22; --good: #27ae60; --easy: #2980b9;
         }
-
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg-color); display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        body { font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; background: var(--bg-color); display: flex; flex-direction: column; align-items: center; padding: 15px; margin: 0; color: var(--text-p); }
         #app { width: 100%; max-width: 500px; text-align: center; }
 
-        /* 雲端功能列 */
-        .cloud-bar { display: flex; gap: 8px; margin-bottom: 15px; background: #fff; padding: 10px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .btn-cloud { flex: 1; background: #34495e; color: white; border: none; padding: 8px; border-radius: 8px; cursor: pointer; font-size: 0.75rem; font-weight: bold; }
+        /* 頂部功能列 */
+        .sync-bar { display: flex; gap: 8px; margin-bottom: 10px; background: #fff; padding: 8px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); justify-content: space-between; align-items: center;}
+        .btn-cloud { background: #34495e; color: white; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.75rem; font-weight: bold; }
+        .stats-bar { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; margin-bottom: 10px; color: var(--text-s); width: 100%; }
         
-        .stats-bar { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; margin-bottom: 10px; color: var(--secondary-text); width: 100%; }
-        .card { background: var(--card-bg); padding: 40px 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); min-height: 250px; display: flex; flex-direction: column; justify-content: center; cursor: pointer; position: relative; }
-        .word-title { font-size: 2.5rem; font-weight: bold; }
-        #answer-area { display: none; border-top: 1px solid #eee; margin-top: 20px; padding-top: 20px; }
-        .button-group { display: none; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 25px; }
+        /* 🆕 語速調整區 */
+        .speed-control { display: flex; align-items: center; gap: 5px; font-size: 0.75rem; color: var(--text-s); }
+        .speed-slider { width: 60px; accent-color: var(--accent); cursor: pointer; }
+
+        /* 搜尋與新增面板 */
+        .search-row { display: flex; gap: 8px; margin-bottom: 15px; position: relative; width: 100%; }
+        #searchInput { flex: 1; padding: 10px 15px; border-radius: 20px; border: 1px solid #ddd; outline: none; font-size: 0.9rem; }
+        .btn-cam { background: var(--cambridge); color: white; border: none; padding: 0 15px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 0.8rem; }
+        #searchResults { position: absolute; top: 45px; width: 100%; background: white; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); z-index: 10; max-height: 250px; overflow-y: auto; display: none; text-align: left; }
+        .search-item { padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+        .add-hint { padding: 12px; text-align: center; color: var(--accent); font-weight: bold; cursor: pointer; background: #f0faff; border-radius: 0 0 10px 10px; font-size: 0.85rem; }
+        
+        #addPanel { display: none; background: #fff; padding: 20px; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); margin-bottom: 15px; text-align: left; }
+        .add-input { width: 100%; padding: 8px; margin: 5px 0 12px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        .add-actions { display: flex; gap: 10px; }
+        .btn-save { background: var(--good); color: white; flex: 1; border: none; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-cancel { background: #ccc; color: white; border: none; padding: 10px; border-radius: 8px; cursor: pointer; }
+
+        /* 卡片主體 */
+        .card { background: var(--card-bg); padding: 30px 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); min-height: 220px; display: flex; flex-direction: column; justify-content: center; cursor: pointer; position: relative; transition: 0.3s; }
+        .word-container { display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .word-title { font-size: 2.5rem; font-weight: bold; margin: 0; word-break: break-all; }
+        .btn-voice { background: none; border: 2px solid var(--accent); color: var(--accent); border-radius: 50%; width: 35px; height: 35px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
+        .cambridge-link { display: inline-block; margin-top: 8px; color: var(--cambridge); font-size: 0.75rem; text-decoration: none; font-weight: bold; border: 1px solid var(--cambridge); padding: 3px 8px; border-radius: 12px; }
+
+        /* 答案區 */
+        #answer-area { display: none; border-top: 1px solid #eee; margin-top: 15px; padding-top: 15px; }
+        .definition { font-size: 1.15rem; font-weight: 600; color: var(--text-p); margin-bottom: 8px; }
+        .example-container { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; background: #f9f9f9; padding: 10px; border-radius: 8px; text-align: left; }
+        .example-text { flex: 1; font-size: 0.85rem; color: var(--text-s); font-style: italic; line-height: 1.4; }
+        .btn-voice-sm { background: none; border: 1px solid var(--text-s); color: var(--text-s); border-radius: 50%; width: 25px; height: 25px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; flex-shrink: 0; margin-top: 2px; }
+
+        /* 按鈕與報表 */
+        .button-group { display: none; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 20px; }
         .rate-btn { border: none; padding: 12px 5px; border-radius: 10px; color: white; font-weight: bold; cursor: pointer; font-size: 0.8rem; }
-        .btn-again { background: var(--again-color); } .btn-hard { background: var(--hard-color); }
-        .btn-good { background: var(--good-color); } .btn-easy { background: var(--easy-color); }
+        .btn-again { background: var(--again); } .btn-hard { background: var(--hard); }
+        .btn-good { background: var(--good); } .btn-easy { background: var(--easy); }
         
-        .stats-dashboard { background: #fff; border-radius: 15px; padding: 15px; margin-top: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); width: 100%; }
-        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
+        .stats-dashboard { background: #fff; border-radius: 15px; padding: 15px; margin-top: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); width: 100%; box-sizing: border-box;}
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
         .stat-item { padding: 8px; border-radius: 8px; color: white; font-size: 0.75rem; }
         .stat-val { font-size: 1.1rem; font-weight: bold; display: block; }
+        
+        .hint { font-size: 0.75rem; color: #ccc; margin-top: 15px; line-height: 1.4; }
         input[type="file"] { display: none; }
-        .upload-label { color: var(--accent-color); text-decoration: underline; cursor: pointer; }
+        .upload-label { color: var(--accent); text-decoration: underline; cursor: pointer; }
+        .btn-reset { font-size: 0.7rem; color: #aaa; background: none; border: none; cursor: pointer; text-decoration: underline; }
     </style>
 </head>
 <body>
 
 <div id="app">
-    <div class="cloud-bar">
-        <button class="btn-cloud" onclick="setSyncID()">🔑 設定 ID</button>
-        <button class="btn-cloud" onclick="downloadFromCloud()">📥 下載進度</button>
-        <span id="id-display" style="font-size:0.7rem; align-self:center; color:#999;">尚未登入</span>
+    <div class="sync-bar">
+        <div style="display:flex; gap:5px;">
+            <button class="btn-cloud" onclick="setSyncID()">🔑 設定 ID</button>
+            <button class="btn-cloud" onclick="downloadFromCloud()">📥 下載</button>
+        </div>
+        <span id="id-display" style="font-size:0.7rem; color:#999; max-width:150px; overflow:hidden; text-overflow:ellipsis;">未登入</span>
+        <button class="btn-reset" onclick="clearMastered()">重置掌握</button>
     </div>
 
     <div class="stats-bar">
         <span id="progress">剩餘: 0</span>
+        <div class="speed-control">
+            🔊 速: <span id="speed-val">0.9</span>x
+            <input type="range" class="speed-slider" id="speedRange" min="0.5" max="1.5" step="0.1" value="0.9" oninput="updateSpeed()">
+        </div>
         <label class="upload-label" for="fileInput">追加 CSV</label>
         <input type="file" id="fileInput" accept=".csv">
     </div>
 
+    <div class="search-row">
+        <input type="text" id="searchInput" placeholder="搜尋單字..." oninput="searchWords()">
+        <button class="btn-cam" onclick="openCambridgeDirect()">劍橋</button>
+        <div id="searchResults"></div>
+    </div>
+
+    <div id="addPanel">
+        <h3 style="margin-top:0; color:var(--cambridge); font-size:1.1rem;">➕ 新增單字</h3>
+        <label style="font-size:0.8rem;">單字</label><input type="text" id="newWord" class="add-input">
+        <label style="font-size:0.8rem;">解釋</label><input type="text" id="newDef" class="add-input">
+        <label style="font-size:0.8rem;">例句</label><textarea id="newEx" class="add-input" rows="3"></textarea>
+        <div class="add-actions">
+            <button class="btn-save" onclick="saveNewWord()">確認存入</button>
+            <button class="btn-cancel" onclick="toggleAddPanel(false)">取消</button>
+        </div>
+    </div>
+
     <div class="card" id="mainCard" onclick="showAnswer()">
         <div id="card-front">
-            <h2 class="word-title" id="displayWord">載入中...</h2>
-            <button style="background:none; border:none; cursor:pointer; font-size:1.2rem;" onclick="event.stopPropagation(); reSpeak();">🔊</button>
+            <div class="word-container">
+                <h2 class="word-title" id="displayWord">載入中...</h2>
+                <button class="btn-voice" onclick="event.stopPropagation(); reSpeak();">🔊</button>
+            </div>
+            <div id="cambridge-btn-container"></div>
         </div>
         <div id="answer-area">
-            <div id="displayDefinition" style="font-weight:bold; font-size:1.2rem;"></div>
-            <div id="displayExample" style="color:#7f8c8d; font-style:italic; font-size:0.9rem; margin-top:10px;"></div>
-            <button style="background:none; border:none; cursor:pointer;" onclick="event.stopPropagation(); speakExample();">🔊 例句</button>
+            <div class="definition" id="displayDefinition"></div>
+            <div class="example-container">
+                <div class="example-text" id="displayExample"></div>
+                <button class="btn-voice-sm" onclick="event.stopPropagation(); speakExample();">🔊</button>
+            </div>
         </div>
     </div>
 
     <div class="button-group" id="controls">
-        <button class="rate-btn btn-again" onclick="handleRate(1)">Again</button>
-        <button class="rate-btn btn-hard" onclick="handleRate(2)">Hard</button>
-        <button class="rate-btn btn-good" onclick="handleRate(3)">Good</button>
-        <button class="rate-btn btn-easy" onclick="handleRate(4)">掌握</button>
+        <button class="rate-btn btn-again" onclick="handleRate(1)">Again (1)</button>
+        <button class="rate-btn btn-hard" onclick="handleRate(2)">Hard (2)</button>
+        <button class="rate-btn btn-good" onclick="handleRate(3)">Good (3)</button>
+        <button class="rate-btn btn-easy" onclick="handleRate(4)">掌握 (4)</button>
     </div>
 
     <div class="stats-dashboard">
@@ -134,23 +187,44 @@
             <div class="stat-item btn-good"><span class="stat-val" id="count-good">0</span>熟悉</div>
             <div class="stat-item btn-easy"><span class="stat-val" id="count-easy">0</span>掌握</div>
         </div>
+        <div style="margin-top: 10px; font-size: 0.75rem; color: #888;">掌握累積：<span id="total-mastered" style="font-weight:bold; color:var(--easy);">0</span> | 今日複習：<span id="total-reviews">0</span></div>
     </div>
+
+    <div class="hint">快捷鍵: <b>空白鍵</b> (看答案) | <b>數字 1-4</b> (評分) | <b>R</b> (單字發音)</div>
 </div>
 
 <script>
+    // --- 核心變數 ---
     let deck = JSON.parse(localStorage.getItem('vocab_deck')) || [];
     let masteredList = JSON.parse(localStorage.getItem('mastered_list')) || [];
-    let stats = JSON.parse(localStorage.getItem('daily_stats')) || { again:0, hard:0, good:0, easy:0 };
+    let today = new Date().toLocaleDateString();
+    let stats = JSON.parse(localStorage.getItem('daily_stats')) || { date: today, again: 0, hard: 0, good: 0, easy: 0, total: 0 };
+    if (stats.date !== today) stats = { date: today, again: 0, hard: 0, good: 0, easy: 0, total: 0 };
+    
     let currentIndex = 0;
+    let currentSpeed = parseFloat(localStorage.getItem('speak_speed')) || 0.9;
+    window.isCloudMode = false;
 
+    // --- 初始化 ---
     function init() {
         const sid = localStorage.getItem('sync_id');
-        if(sid) document.getElementById('id-display').innerText = "ID: " + sid;
+        if(sid) { document.getElementById('id-display').innerText = sid; window.isCloudMode = true; }
+        document.getElementById('speedRange').value = currentSpeed;
+        document.getElementById('speed-val').innerText = currentSpeed.toFixed(1);
         updateUI();
     }
 
+    // --- 介面更新 ---
     function updateUI() {
-        if (deck.length === 0) { document.getElementById('displayWord').innerText = "已完成！"; return; }
+        if (deck.length === 0) {
+            document.getElementById('displayWord').innerText = "已完成！";
+            document.getElementById('displayDefinition').innerText = "請匯入或追加單字";
+            document.getElementById('displayExample').innerText = "";
+            document.getElementById('cambridge-btn-container').innerHTML = "";
+            document.getElementById('answer-area').style.display = 'block'; // 顯示提示
+            document.getElementById('controls').style.display = 'none';
+            return;
+        }
         const item = deck[currentIndex];
         document.getElementById('displayWord').innerText = item.word;
         document.getElementById('displayDefinition').innerText = item.definition;
@@ -158,26 +232,37 @@
         document.getElementById('answer-area').style.display = 'none';
         document.getElementById('controls').style.display = 'none';
         document.getElementById('progress').innerText = "剩餘: " + deck.length;
-        document.getElementById('count-again').innerText = stats.again;
-        document.getElementById('count-hard').innerText = stats.hard;
-        document.getElementById('count-good').innerText = stats.good;
-        document.getElementById('count-easy').innerText = stats.easy;
+        
+        // 劍橋連結恢復
+        const camUrl = `https://dictionary.cambridge.org/zht/詞典/英語-漢語-繁體/${item.word.toLowerCase()}`;
+        document.getElementById('cambridge-btn-container').innerHTML = `<a href="${camUrl}" target="_blank" class="cambridge-link" onclick="event.stopPropagation()">劍橋辭典 ↗</a>`;
+        
+        updateStatsUI();
         speak(item.word);
     }
 
-    function showAnswer() { document.getElementById('answer-area').style.display = 'block'; document.getElementById('controls').style.display = 'grid'; }
+    function showAnswer() { if (deck.length > 0) { document.getElementById('answer-area').style.display = 'block'; document.getElementById('controls').style.display = 'grid'; } }
 
+    // --- 評分邏輯 (含自動上傳) ---
     function handleRate(level) {
         const item = deck.splice(currentIndex, 1)[0];
+        stats.total++;
         if (level === 1) { stats.again++; deck.splice(1, 0, item); }
         else if (level === 2) { stats.hard++; deck.splice(Math.floor(deck.length/2), 0, item); }
         else if (level === 3) { stats.good++; deck.push(item); }
         else if (level === 4) { stats.easy++; masteredList.push(item.word.toLowerCase()); }
         
-        save();
-        updateUI();
-        // 每點擊一次評分，就自動同步到雲端一次
-        if(window.uploadToCloud) window.uploadToCloud();
+        save(); updateUI();
+        if(window.isCloudMode && window.uploadToCloud) window.uploadToCloud(); // 自動同步
+    }
+
+    function updateStatsUI() {
+        document.getElementById('count-again').innerText = stats.again;
+        document.getElementById('count-hard').innerText = stats.hard;
+        document.getElementById('count-good').innerText = stats.good;
+        document.getElementById('count-easy').innerText = stats.easy;
+        document.getElementById('total-reviews').innerText = stats.total;
+        document.getElementById('total-mastered').innerText = masteredList.length;
     }
 
     function save() {
@@ -186,15 +271,69 @@
         localStorage.setItem('daily_stats', JSON.stringify(stats));
     }
 
-    function setSyncID() {
-        const id = prompt("請輸入您的專屬同步 ID (例如: lee0520)：");
-        if(id) { localStorage.setItem('sync_id', id); location.reload(); }
+    // --- 🔊 發音邏輯 (含語速)恢復 ---
+    function speak(t, speedFactor = 1.0) {
+        window.speechSynthesis.cancel();
+        const m = new SpeechSynthesisUtterance(t);
+        m.lang = 'en-US';
+        m.rate = currentSpeed * speedFactor; // 套用語速
+        window.speechSynthesis.speak(m);
+    }
+    function reSpeak() { if(deck.length > 0) speak(deck[currentIndex].word); }
+    function speakExample() { if(deck.length > 0) speak(deck[currentIndex].example, 0.95); } // 例句稍微再慢一點
+    
+    // 🆕 語速調整功能恢復
+    function updateSpeed() {
+        currentSpeed = parseFloat(document.getElementById('speedRange').value);
+        document.getElementById('speed-val').innerText = currentSpeed.toFixed(1);
+        localStorage.setItem('speak_speed', currentSpeed);
     }
 
-    function speak(t) { window.speechSynthesis.cancel(); const m = new SpeechSynthesisUtterance(t); m.lang = 'en-US'; window.speechSynthesis.speak(m); }
-    function reSpeak() { speak(deck[currentIndex].word); }
-    function speakExample() { speak(deck[currentIndex].example); }
+    // --- 🔍 搜尋與手動新增邏輯 (全恢復) ---
+    function searchWords() {
+        const query = document.getElementById('searchInput').value.toLowerCase().trim();
+        const resultsDiv = document.getElementById('searchResults');
+        if (!query) { resultsDiv.style.display = 'none'; return; }
+        const matches = deck.filter(item => item.word.toLowerCase().includes(query));
+        let html = matches.map(item => `<div class="search-item" onclick="jumpToWord('${item.word}')"><strong>${item.word}</strong> - ${item.definition}</div>`).join('');
+        html += `<div class="add-hint" onclick="prepareAdd('${query}')">➕ 沒搜到 "${query}"？由劍橋手動新增</div>`;
+        resultsDiv.innerHTML = html;
+        resultsDiv.style.display = 'block';
+    }
 
+    function jumpToWord(word) {
+        const index = deck.findIndex(item => item.word === word);
+        if (index !== -1) { currentIndex = index; updateUI(); document.getElementById('searchInput').value = ""; resultsDiv.style.display = 'none'; }
+    }
+
+    function prepareAdd(word) {
+        document.getElementById('newWord').value = word;
+        document.getElementById('searchResults').style.display = 'none';
+        toggleAddPanel(true);
+        window.open(`https://dictionary.cambridge.org/zht/詞典/英語-漢語-繁體/${word.toLowerCase()}`, '_blank');
+    }
+
+    function toggleAddPanel(show) { document.getElementById('addPanel').style.display = show ? 'block' : 'none'; if(show) document.getElementById('newDef').focus(); }
+
+    function saveNewWord() {
+        const word = document.getElementById('newWord').value.trim();
+        const definition = document.getElementById('newDef').value.trim();
+        const example = document.getElementById('newEx').value.trim();
+        if (word && definition) {
+            deck.unshift({ word, definition, example });
+            save(); toggleAddPanel(false);
+            document.getElementById('searchInput').value = "";
+            currentIndex = 0; updateUI();
+            if(window.isCloudMode && window.uploadToCloud) window.uploadToCloud(); // 新增也同步
+        }
+    }
+
+    function openCambridgeDirect() {
+        const query = document.getElementById('searchInput').value.trim() || (deck[currentIndex] ? deck[currentIndex].word : "");
+        if (query) window.open(`https://dictionary.cambridge.org/zht/詞典/英語-漢語-繁體/${query.toLowerCase()}`, '_blank');
+    }
+
+    // --- 檔案匯入與管理 ---
     document.getElementById('fileInput').addEventListener('change', function(e) {
         const reader = new FileReader();
         reader.onload = function(event) {
@@ -204,10 +343,27 @@
                 if (p.length >= 2) return { word: p[0].trim(), definition: p[1].trim(), example: (p[2] || "").trim() };
             }).filter(i => i);
             const mSet = new Set(masteredList);
-            deck = [...deck, ...newItems.filter(i => !mSet.has(i.word.toLowerCase()))];
-            save(); init();
+            const existingSet = new Set(deck.map(i => i.word.toLowerCase()));
+            const uniqueNew = newItems.filter(i => !mSet.has(i.word.toLowerCase()) && !existingSet.has(i.word.toLowerCase()));
+            deck = [...deck, ...uniqueNew];
+            save(); alert(`成功追加 ${uniqueNew.length} 個新單字！`); init();
+            if(window.isCloudMode && window.uploadToCloud) window.uploadToCloud(); // 匯入也同步
         };
         reader.readAsText(e.target.files[0]);
+    });
+
+    function setSyncID() {
+        const id = prompt("請設定您的專屬同步 ID (電腦手機需一致)：");
+        if(id) { localStorage.setItem('sync_id', id); location.reload(); }
+    }
+    function clearMastered() { if(confirm("重置掌握清單嗎？學過的字會重新出現。")) { masteredList = []; save(); location.reload(); } }
+
+    // --- 快捷鍵 ---
+    document.addEventListener('keydown', (e) => {
+        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+        if (e.code === 'Space') { e.preventDefault(); showAnswer(); }
+        else if (['1', '2', '3', '4'].includes(e.key)) { if (document.getElementById('controls').style.display === 'grid') handleRate(parseInt(e.key)); }
+        else if (e.key.toLowerCase() === 'r') reSpeak();
     });
 
     init();
